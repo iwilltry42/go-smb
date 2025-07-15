@@ -1,6 +1,9 @@
 package gss
 
 import (
+	"strings"
+
+	"github.com/geoffgarside/ber"
 	"github.com/jfjallid/gofork/encoding/asn1"
 
 	"github.com/jfjallid/go-smb/smb/encoder"
@@ -120,10 +123,22 @@ func (n *NegTokenInit) MarshalBinary(meta *encoder.Metadata) ([]byte, error) {
 
 func (n *NegTokenInit) UnmarshalBinary(buf []byte, meta *encoder.Metadata) error {
 	data := NegTokenInit{}
-	if _, err := asn1.UnmarshalWithParams(buf, &data, "application"); err != nil {
-		log.Debugln(err)
-		return err
+
+	// Check if the buffer starts with application tag (0x60)
+	if len(buf) > 0 && buf[0] == 0x60 {
+		// Strip the application tag and unmarshal as a sequence
+		if _, err := UnmarshalWithParams(buf, &data, "application"); err != nil {
+			log.Debugln(err)
+			return err
+		}
+	} else {
+		// Try standard unmarshaling
+		if _, err := UnmarshalWithParams(buf, &data, ""); err != nil {
+			log.Debugln(err)
+			return err
+		}
 	}
+
 	*n = data
 	return nil
 }
@@ -141,7 +156,7 @@ func (r *NegTokenResp) UnmarshalBinary(buf []byte, meta *encoder.Metadata) error
 		return nil
 	}
 	data := NegTokenResp{}
-	if _, err := asn1.UnmarshalWithParams(buf, &data, "explicit,tag:1"); err != nil {
+	if _, err := UnmarshalWithParams(buf, &data, "explicit,tag:1"); err != nil {
 		log.Criticalln(err)
 		return err
 	}
@@ -156,4 +171,18 @@ func (g *gsswrapped) MarshalBinary(meta *encoder.Metadata) ([]byte, error) {
 	}
 	buf[0] = 0xa1
 	return buf, nil
+}
+
+// Fallback as per https://github.com/hirochachacha/go-smb2/pull/34 and https://github.com/hirochachacha/go-smb2/commit/4c1540178b61617aea1aec110d24acf82f99b00f#diff-8c37e2eb92c79e1b19cfdc60bc66f1f707d004314e5f012f816e55079ccf9efe
+func UnmarshalWithParams(b []byte, val interface{}, params string) ([]byte, error) {
+	rest, err := asn1.UnmarshalWithParams(b, val, params)
+	if err != nil {
+		if !strings.Contains(err.Error(), "superfluous leading zeros") {
+			log.Criticalln(err)
+			return nil, err
+		}
+		return ber.UnmarshalWithParams(b, val, params)
+	}
+
+	return rest, nil
 }

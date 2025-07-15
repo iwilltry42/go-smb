@@ -127,7 +127,7 @@ func (self *KRB5Token) MarshalBinary() (res []byte, err error) {
 func (self *KRB5Token) UnmarshalBinary(buf []byte) (err error) {
 	log.Debugln("In UnmarshalBinary for KRB5Token")
 
-	rest, err := asn1.UnmarshalWithParams(buf, &self.Oid, "application,explicit,tag:0")
+	rest, err := gss.UnmarshalWithParams(buf, &self.Oid, "application,explicit,tag:0")
 	if err != nil {
 		log.Errorf("Failed to unmarshal KRB5Token OID: %v\n", err)
 		return
@@ -232,7 +232,7 @@ func InitKerberosClient(username, domain, password string, hash, aesKey []byte, 
 	cfg.LibDefaults.DNSLookupKDC = true
 	cfg.LibDefaults.DefaultRealm = strings.ToUpper(domain)
 	cfg.Realms = []config.Realm{
-		config.Realm{
+		{
 			Realm: strings.ToUpper(domain),
 		},
 	}
